@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RESQ — Smart Disaster Response &amp; Evacuation System</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@600&family=Manrope:wght@300;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+      integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+<link rel="stylesheet" href="style.css?v=18">
+</head>
+<body>
+
+<nav id="nav">
+  <a class="brand" href="#top">res<em>q.</em></a>
+  <div class="nav-links" data-nav>
+    <a href="#map" data-rev>Map</a>
+    <a href="#routes" data-rev>Routes</a>
+    <a href="#shelters" data-rev>Shelters</a>
+    <a href="#disaster" data-rev>Disaster</a>
+    <a href="#scenarios" data-rev>Scenarios</a>
+    <a href="#network" data-rev>Network</a>
+    <a href="#analytics" data-rev>Analytics</a>
+  </div>
+  <a class="btn btn-ghost" href="#routes" data-rev>Plan a route</a>
+</nav>
+
+<!-- ============ STAGE 1 · molten glow hero (300svh) ============ -->
+<section class="stage stage-hero" id="top" data-stage="hero">
+  <div class="stage-inner">
+    <canvas id="glowCanvas" aria-hidden="true"></canvas>
+    <div class="hero-lockup">
+      <h1 class="wordmark" aria-label="resq.">res<em>q.</em></h1>
+      <div class="strap mono" data-rev>10 LOCATIONS &middot; 16 ROADS &middot; 3 SHELTERS &middot; DIJKSTRA / BFS / DFS / MST</div>
+      <p class="hero-lede" data-split>A live command view of a disaster-area road graph. Simulate the event, watch roads fail, and compute the safest way out.</p>
+    </div>
+    <div class="scroll-cue mono" data-rev>SCROLL</div>
+  </div>
+</section>
+
+<!-- ============ STAGE 2 · left-to-right wipe (280svh) ============ -->
+<section class="stage stage-wipe" data-stage="wipe">
+  <div class="stage-inner">
+    <div class="wipe-center">
+      <p class="wipe-base" id="wipeBase" aria-hidden="true">Block one road and the safest route moves.</p>
+      <p class="wipe-clone" id="wipeClone" aria-hidden="true">Block one road and the safest route moves.</p>
+      <div class="wipe-rule"><span id="wipeFill"></span></div>
+    </div>
+    <div class="wipe-footer">
+      <span class="mono" data-rev>STATUS &rarr; COST</span>
+      <span class="mono" data-rev>DIJKSTRA, LIVE</span>
+      <span class="mono" data-rev>16 ROADS WATCHED</span>
+    </div>
+  </div>
+</section>
+
+<!-- ============ STAGE 3 · scroll-traced curve (380svh) ============ -->
+<section class="stage stage-curve" data-stage="curve">
+  <div class="stage-inner">
+    <div class="curve-cols">
+      <div class="curve-left">
+        <p class="eyebrow mono" data-rev>02 &middot; EVACUATION COST</p>
+        <h2 class="curve-head" data-split>How far to safety, <em>from the graph.</em></h2>
+        <div id="processRows">
+          <div class="prow" data-rev><span class="pval" data-slot="v0">&mdash;</span><span class="plab" data-slot="l0">&mdash;</span><span class="pnote mono" data-slot="n0">SAFEST ROUTE &middot; CURRENT NETWORK</span></div>
+          <div class="prow" data-rev><span class="pval" data-slot="v1">&mdash;</span><span class="plab" data-slot="l1">&mdash;</span><span class="pnote mono" data-slot="n1">SAFEST ROUTE &middot; CURRENT NETWORK</span></div>
+          <div class="prow" data-rev><span class="pval" data-slot="v2">&mdash;</span><span class="plab" data-slot="l2">&mdash;</span><span class="pnote mono" data-slot="n2">SAFEST ROUTE &middot; CURRENT NETWORK</span></div>
+          <div class="prow" data-rev><span class="pval" data-slot="v3">&mdash;</span><span class="plab" data-slot="l3">&mdash;</span><span class="pnote mono" data-slot="n3">SAFEST ROUTE &middot; CURRENT NETWORK</span></div>
+          <div class="prow" data-rev><span class="pval" data-slot="v4">&mdash;</span><span class="plab" data-slot="l4">&mdash;</span><span class="pnote mono" data-slot="n4">SAFEST ROUTE &middot; CURRENT NETWORK</span></div>
+        </div>
+      </div>
+      <div class="curve-right">
+        <div class="plot" data-rev>
+          <canvas id="curveCanvas"></canvas>
+          <div class="readout" id="curveReadout">&mdash;<small>&nbsp;KM</small></div>
+          <div class="plot-cap mono"><span id="curveFrom">FROM &mdash;</span><span id="curveTo">TO &mdash;</span></div>
+        </div>
+        <p class="plot-note" data-rev>Traced by scroll: the ember line is real Dijkstra cost from the Residential Area to each shelter and market, interpolated piecewise from live route queries.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ STAGE 4 · scaling molten form (300svh) ============ -->
+<section class="stage stage-gather" data-stage="gather">
+  <div class="stage-inner">
+    <canvas id="formCanvas" aria-hidden="true"></canvas>
+    <div class="gather-lockup">
+      <h2 class="gather-head" data-split>Plan the evacuation before it happens.</h2>
+      <a class="btn btn-solid" href="#routes" data-rev>Open the planner</a>
+    </div>
+  </div>
+</section>
+
+<main>
+
+<!-- ============ band · three-column explainer ============ -->
+<section class="band" id="how">
+  <div class="band-head">
+    <div class="eyebrow-row"><span class="eyebrow mono" data-rev>03 &middot; THE ENGINE</span><span class="rule"></span></div>
+    <div class="head-cols">
+      <h2 data-split>Four algorithms, one road graph.</h2>
+      <p class="lede" data-split>Everything on this page is computed from the live graph by the same code the desktop tool runs &mdash; nothing here is canned.</p>
+    </div>
+  </div>
+  <div class="cols3">
+    <div class="col" data-rev>
+      <span class="mono col-idx">A</span>
+      <h3>Dijkstra</h3>
+      <p>Costs every road as distance plus risk and traffic penalties, and treats blocked roads as impassable. It returns the cheapest evacuation route and drives the risk level and warnings shown with every result.</p>
+    </div>
+    <div class="col" data-rev>
+      <span class="mono col-idx">B</span>
+      <h3>BFS &middot; DFS</h3>
+      <p>Breadth-first search counts the minimum number of roads between two points. Depth-first search answers reachability and finds the connected components &mdash; the isolated regions a disaster leaves behind.</p>
+    </div>
+    <div class="col" data-rev>
+      <span class="mono col-idx">C</span>
+      <h3>Kruskal MST</h3>
+      <p>Grows a minimum spanning tree over road distance with union-find: the smallest set of roads that keeps every location reachable &mdash; the backbone to keep open, clear or repair first.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============ band · live map ============ -->
+<section class="band" id="map">
+  <div class="band-head">
+    <div class="eyebrow-row"><span class="eyebrow mono" data-rev>04 &middot; LIVE MAP</span><span class="rule"></span></div>
+    <div class="head-cols">
+      <h2 data-split>The area, as it is right now.</h2>
+      <p class="lede" data-split>Drag to pan, scroll to zoom, click a marker for its detail card — on the schematic or a real basemap. Toggle street or satellite view; road colour follows live status on both.</p>
+    </div>
+  </div>
+  <div class="map-frame" data-rev>
+    <div id="mapCanvasWrap">
+      <canvas id="mapCanvas"></canvas>
+      <div class="map-status mono ms-ok" id="mapStatus" role="status" title="Current route watch — click for route detail"></div>
+      <div class="map-preview mono" id="mapPreview" hidden></div>
+      <div class="map-legend mono" id="mapLegend"></div>
+      <div class="map-detail" id="mapDetail" hidden></div>
+    </div>
+    <div id="leafletMap" aria-label="Real map of the disaster area"></div>
+    <div class="map-toggle mono" role="group" aria-label="Map view">
+      <button type="button" id="viewSchematic" class="mt-btn active">SCHEMATIC</button>
+      <button type="button" id="viewStreet" class="mt-btn">STREET</button>
+      <button type="button" id="viewSatellite" class="mt-btn">SATELLITE</button>
+    </div>
+    <div class="map-tools mono" role="group" aria-label="Map layers">
+      <button type="button" id="mapReset" class="mt-btn">RESET VIEW</button>
+      <button type="button" id="mapFitRoute" class="mt-btn">FIT ROUTE</button>
+      <button type="button" id="tglIncidents" class="mt-btn active">INCIDENTS</button>
+      <button type="button" id="tglShelters" class="mt-btn active">SHELTERS</button>
+      <button type="button" id="tglRoutes" class="mt-btn active">ROUTES</button>
+      <button type="button" id="legendToggle" class="mt-btn active">LEGEND</button>
+    </div>
+    <div class="map-count mono" id="mapCount"></div>
+  </div>
+</section>
+
+<!-- ============ band · routes ============ -->
+<section class="band" id="routes">
+  <div class="band-head">
+    <div class="eyebrow-row"><span class="eyebrow mono" data-rev>05 &middot; EVACUATION ROUTES</span><span class="rule"></span></div>
+    <div class="head-cols">
+      <h2 data-split>Safest path out, computed live.</h2>
+      <p class="lede" data-split>Dijkstra over the current network state &mdash; distance plus penalties, blocked roads excluded, risk and warnings attached to the result. Compare the distance-minimal route against it, and watch a planned route reroute itself when the network changes.</p>
+    </div>
+  </div>
+  <div class="split-6-6">
+    <form id="routeForm" class="form" data-rev>
+      <label class="mono">FROM</label>
+      <select id="routeFrom" required></select>
+      <label class="mono">TO</label>
+      <select id="routeTo" required></select>
+      <div class="form-actions">
+        <button type="submit" class="btn btn-solid">Find safest route</button>
+        <button type="button" id="nearestBtn" class="btn btn-ghost">Nearest open shelter</button>
+        <button type="button" id="compareBtn" class="btn btn-ghost">Compare shortest vs safest</button>
+      </div>
+    </form>
+    <div id="routeResult" class="result" hidden></div>
+  </div>
+  <div class="watch" id="routeWatch">
+    <div class="watch-head">
+      <span class="mono watch-title">ROUTE WATCH</span>
+      <span id="watchBadge"></span>
+      <span class="watch-msg" id="watchMsg"></span>
+      <button class="btn btn-ghost" type="button" id="resetNetwork">Reset network</button>
+    </div>
+    <div class="watch-body" id="watchBody"></div>
+  </div>
+  <div class="cmp-wrap" id="compareWrap" hidden>
+    <div class="cmp-grid" id="cmpGrid"></div>
+    <div class="cmp-foot">
+      <div class="cmp-why">
+        <h4>Why this route</h4>
+        <ul id="cmpWhy"></ul>
+      </div>
+      <div class="cmp-formula">
+        <h4>Dijkstra cost formula</h4>
+        <code id="cmpFormula"></code>
+        <div id="cmpTerms"></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ band · shelters ============ -->
+<section class="band" id="shelters">
+  <div class="band-head">
+    <div class="eyebrow-row"><span class="eyebrow mono" data-rev>06 &middot; EMERGENCY SHELTERS</span><span class="rule"></span></div>
+    <div class="head-cols">
+      <h2 data-split>Capacity, occupancy, availability.</h2>
+      <p class="lede" data-split>Three shelters tracked live. Recommendations rank them by route cost, travel time, route risk, capacity and current occupancy &mdash; never by distance alone &mdash; and a full shelter rolls the recommendation to the next best one.</p>
+    </div>
+  </div>
+  <div class="stat-row" id="shelterStats"></div>
+  <form id="recForm" class="form rec-form" data-rev>
+    <div><label class="mono">EVACUATE FROM</label><select id="recFrom"></select></div>
+    <div><label class="mono">EVACUEES TO PLACE</label><input id="recEvacuees" type="number" min="1" value="50"></div>
+    <div class="form-actions">
+      <button class="btn btn-solid" type="submit">Recommend shelters</button>
+      <span class="form-note mono" id="recMsg"></span>
+    </div>
+  </form>
+  <div class="rec-list" id="recList" hidden></div>
+  <div class="split-7-5">
+    <div class="table-wrap" data-rev>
+      <table class="table" id="shelterTable">
+        <thead><tr><th>SHELTER</th><th>AT</th><th>CAP</th><th>OCC</th><th>FREE</th><th>SAFETY</th><th>STATUS</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <form id="checkinForm" class="form" data-rev>
+      <label class="mono">SHELTER</label>
+      <select id="checkinZone"></select>
+      <label class="mono">EVACUEES</label>
+      <input id="checkinCount" type="number" min="1" value="10" required>
+      <div class="form-actions"><button class="btn btn-solid" type="submit">Check in</button></div>
+      <p class="form-note mono" id="checkinMsg"></p>
+    </form>
+  </div>
+</section>
+
+<!-- ============ band · disaster ============ -->
+<section class="band" id="disaster">
+  <div class="band-head">
+    <div class="eyebrow-row"><span class="eyebrow mono" data-rev>07 &middot; DISASTER SIMULATION</span><span class="rule"></span></div>
+    <div class="head-cols">
+      <h2 data-split>Apply the event. Watch the network react.</h2>
+      <p class="lede" data-split>Fifteen disaster types at four severities. Terrain-aware scoring blocks, damages or flags each road &mdash; and routing reroutes around the damage at once.</p>
+    </div>
+  </div>
+  <div class="split-6-6">
+    <form id="disasterForm" class="form" data-rev>
+      <label class="mono">DISASTER</label>
+      <select id="disasterType"></select>
+      <label class="mono">SEVERITY</label>
+      <select id="disasterSeverity">
+        <option>LOW</option><option selected>MEDIUM</option><option>HIGH</option><option>CRITICAL</option>
+      </select>
+      <div class="form-actions">
+        <button class="btn btn-solid" type="submit">Apply disaster</button>
+        <button class="btn btn-ghost" type="button" id="disasterReset">Reset roads</button>
+      </div>
+    </form>
+    <div id="disasterResult" class="result" hidden></div>
+  </div>
+</section>
+
+<!-- ============ band · disaster scenario comparison ============ -->
+<section class="band" id="scenarios">
+  <div class="band-head">
+    <div class="eyebrow-row"><span class="eyebrow mono" data-rev>08 &middot; SCENARIO COMPARISON</span><span class="rule"></span></div>
+    <div class="head-cols">
+      <h2 data-split>Compare the disasters before you pick one.</h2>
+      <p class="lede" data-split>Every row is simulated on a copy of the sample network with the same Phase&nbsp;1 road logic &mdash; nothing changes until you apply one, and the first row is the network as it stands right now. Road counts, cut-off areas, the evacuation route and reachable shelter capacity are all measured from the real graph.</p>
+    </div>
+  </div>
+  <div class="scen-rows" id="scenRows"></div>
+  <form id="scenForm" class="scen-form" data-rev>
+    <div><label class="mono">EVACUATE FROM</label><select id="scenFrom"></select></div>
+    <div><label class="mono">EVACUATE TO</label><select id="scenTo"></select></div>
+    <div><label class="mono">EVACUEES</label><input id="scenEvacuees" type="number" min="1" value="50"></div>
+    <div class="form-actions">
+      <button class="btn btn-solid" type="submit">Compare scenarios</button>
+      <button class="btn btn-ghost" type="button" id="scenReset">Reset network</button>
+    </div>
+  </form>
+  <div class="scen-summary" id="scenSummary" hidden></div>
+  <div class="table-wrap" id="scenTableWrap" hidden><table class="table scen-table" id="scenTable"></table></div>
+</section>
+
+<!-- ============ band · network table ============ -->
+<section class="band" id="network">
+  <div class="band-head">
+    <div class="eyebrow-row"><span class="eyebrow mono" data-rev>09 &middot; THE NETWORK</span><span class="rule"></span></div>
+    <div class="head-cols">
+      <h2 data-split>Every road, priced in kilometres.</h2>
+      <p class="lede" data-split>The full road list as the backend sees it. Set any directed road's status manually &mdash; the same mutation the disaster engine performs.</p>
+    </div>
+  </div>
+  <div class="ledger" id="roadLedger"></div>
+  <form id="roadForm" class="form form-row" data-rev>
+    <div><label class="mono">ROAD FROM</label><select id="roadFrom"></select></div>
+    <div><label class="mono">ROAD TO</label><select id="roadTo"></select></div>
+    <div><label class="mono">STATUS</label>
+      <select id="roadStatus">
+        <option>OPEN</option><option>HIGH_RISK</option><option>DAMAGED</option><option>BLOCKED</option>
+      </select>
+    </div>
+    <div class="form-actions"><button class="btn btn-solid" type="submit">Update road</button><span class="form-note mono" id="roadMsg"></span></div>
+  </form>
+</section>
+
+<!-- ============ band · analytics ============ -->
+<section class="band" id="analytics">
+  <div class="band-head">
+    <div class="eyebrow-row"><span class="eyebrow mono" data-rev>10 &middot; NETWORK ANALYTICS</span><span class="rule"></span></div>
+    <div class="head-cols">
+      <h2 data-split>BFS, DFS, connectivity, MST.</h2>
+      <p class="lede" data-split>The algorithms behind the map, on the current network state.</p>
+    </div>
+  </div>
+  <div class="cols2x2">
+    <form id="bfsForm" class="form" data-rev>
+      <h3>Traversal</h3>
+      <label class="mono">START AT</label>
+      <select id="travStart"></select>
+      <div class="form-actions">
+        <button class="btn btn-solid" type="submit">Run BFS</button>
+        <button class="btn btn-ghost" type="button" id="dfsBtn">Run DFS</button>
+      </div>
+      <p class="form-note mono" id="travResult"></p>
+    </form>
+    <form id="minRoadsForm" class="form" data-rev>
+      <h3>Minimum roads &amp; connectivity</h3>
+      <div class="pair">
+        <div><label class="mono">FROM</label><select id="mrFrom"></select></div>
+        <div><label class="mono">TO</label><select id="mrTo"></select></div>
+      </div>
+      <div class="form-actions">
+        <button class="btn btn-solid" type="submit">Count roads</button>
+        <button class="btn btn-ghost" type="button" id="connBtn">Check connectivity</button>
+      </div>
+      <p class="form-note mono" id="mrResult"></p>
+    </form>
+    <div class="form" data-rev>
+      <h3>Connected components</h3>
+      <p class="mini">Reachable regions of the traversable network &mdash; isolated areas surface here.</p>
+      <div class="form-actions"><button class="btn btn-solid" id="compBtn" type="button">Find components</button></div>
+      <p class="form-note mono" id="compResult"></p>
+    </div>
+    <div class="form" data-rev>
+      <h3>Minimum spanning tree</h3>
+      <p class="mini">Kruskal's algorithm: least total distance keeping every location connected.</p>
+      <div class="form-actions"><button class="btn btn-solid" id="mstBtn" type="button">Compute MST</button></div>
+      <p class="form-note mono" id="mstResult"></p>
+    </div>
+  </div>
+</section>
+
+<!-- ============ band · FAQ ============ -->
+<section class="band" id="faq">
+  <div class="band-head">
+    <div class="eyebrow-row"><span class="eyebrow mono" data-rev>11 &middot; FAQ</span><span class="rule"></span></div>
+    <div class="head-cols"><h2 data-split>How it works.</h2></div>
+  </div>
+  <div class="faq">
+    <details data-rev><summary>What does Dijkstra's algorithm do here?</summary><p>It finds the cheapest evacuation route where a road's cost is distance plus risk and traffic penalties and blocked roads cost infinitely. Every route result shows cost, distance, risk level and any segment warnings.</p></details>
+    <details data-rev><summary>Why BFS for minimum roads?</summary><p>BFS explores level by level, so the first time it reaches a destination it has used the fewest roads &mdash; useful when junction count matters more than kilometres.</p></details>
+    <details data-rev><summary>What does DFS tell me in a disaster?</summary><p>DFS answers reachability: whether two locations are still connected at all, and which separate regions exist. After roads are blocked, components reveal isolated areas.</p></details>
+    <details data-rev><summary>What is the MST for?</summary><p>Kruskal's algorithm picks the smallest set of roads that keeps every location reachable at minimum total distance &mdash; the backbone to keep open, clear or repair first.</p></details>
+  </div>
+</section>
+
+<footer class="footer mono">
+  <span data-rev>RESQ &middot; SMART DISASTER RESPONSE</span>
+  <span id="footApiState" data-rev>API &mdash;</span>
+  <span data-rev>SPRING BOOT &middot; GRAPH ALGORITHMS</span>
+</footer>
+
+</main>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+        integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<script src="script.js?v=15"></script>
+<script src="app.js?v=16"></script>
+</body>
+</html>

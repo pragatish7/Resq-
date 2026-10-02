@@ -1,0 +1,16 @@
+# Build output
+target/
+bin/
+
+# Freebuff agent workspace (local runtime state, not part of the project)
+.freebuff/
+
+# Environment / secrets
+.env
+.env.*
+!.env.example
+
+# IDE
+.idea/
+.vscode/
+*.iml
