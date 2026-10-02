@@ -116,5 +116,5 @@ The main objective of this project is to demonstrate how **graph algorithms and 
 The system provides a simulation environment where routes can be analyzed under changing road and disaster conditions.
 
 ## 👥 Project Team
-
-* **Pr**
+**PRAGATISH J**
+**DISHANTH RAJ K**
